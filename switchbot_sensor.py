@@ -4,7 +4,7 @@ import hmac
 import base64
 import time
 import uuid
-from typing import Optional, Dict
+from typing import Optional, Dict, Any, Tuple
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -12,7 +12,7 @@ logger = getLogger(__name__)
 class SwitchBotSensor:
     """SwitchBotセンサーとの通信を管理するクラス"""
 
-    def __init__(self, token: str, secret: str, device_id: str):
+    def __init__(self, token, secret, device_id):
         """
         SwitchBotSensorクラスの初期化
 
@@ -26,7 +26,7 @@ class SwitchBotSensor:
         self.device_id = device_id
         self.base_url = "https://api.switch-bot.com/v1.1"
 
-    def _generate_sign(self) -> tuple[str, str, str]:
+    def _generate_sign(self):
         """認証用署名を生成"""
         nonce = str(uuid.uuid4())
         t = str(int(round(time.time() * 1000)))
@@ -41,12 +41,12 @@ class SwitchBotSensor:
 
         return sign, t, nonce
 
-    def get_data(self) -> Optional[Dict]:
+    def get_data(self):
         """
         センサーからデータを取得する
 
         Returns:
-            Optional[Dict]: センサーデータを含む辞書、エラー時はNone
+            dict or None: センサーデータを含む辞書、エラー時はNone
         """
         url = f"{self.base_url}/devices/{self.device_id}/status"
         sign, t, nonce = self._generate_sign()
@@ -76,13 +76,13 @@ class SwitchBotSensor:
             return {
                 'temperature': body.get('temperature'),
                 'humidity': body.get('humidity'),
-                'co2': body.get('CO2', body.get('co2', body.get('carbonDioxide')))  # 大文字のCO2キーを最優先で確認
+                'co2': body.get('CO2', body.get('co2', body.get('carbonDioxide')))
             }
 
         except Exception as e:
             logger.error(f"Failed to get sensor data: {e}")
             return None
 
-    def cleanup(self) -> None:
+    def cleanup(self):
         """クリーンアップ処理（この場合は不要だが、インターフェースの一貫性のため実装）"""
         pass
