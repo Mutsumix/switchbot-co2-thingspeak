@@ -1,0 +1,12 @@
+# ThingSpeak設定
+thingspeak:
+  api_key: "YOUR_THINGSPEAK_WRITE_API_KEY"
+
+# センサー設定
+sensor:
+  scheduler:
+    interval_minutes: 15
+  switchbot:
+    token: "YOUR_SWITCHBOT_TOKEN"
+    secret: "YOUR_SWITCHBOT_SECRET"
+    device_id: "YOUR_DEVICE_ID"
