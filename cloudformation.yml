@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SwitchBot CO2センサーデータ収集とThingSpeakへの送信を行うサーバーレス環境'
+
+Parameters:
+  ThingSpeakApiKey:
+    Type: String
+    NoEcho: true
+    Description: ThingSpeak Write API Key
+
+  SwitchBotToken:
+    Type: String
+    NoEcho: true
+    Description: SwitchBot API Token
+
+  SwitchBotSecret:
+    Type: String
+    NoEcho: true
+    Description: SwitchBot API Secret
+
+  SwitchBotDeviceId:
+    Type: String
+    Description: SwitchBot Device ID
+
+  ScheduleExpression:
+    Type: String
+    Default: 'rate(1 hour)'
+    Description: CloudWatch Eventsのスケジュール（例：rate(1 hour), cron(0 * * * ? *)）
+
+Resources:
+  # Systems Managerパラメータストア
+  ThingSpeakApiKeyParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/switchbot/thingspeak/api_key'
+      Type: SecureString
+      Value: !Ref ThingSpeakApiKey
+      Description: 'ThingSpeak API Key'
+
+  SwitchBotTokenParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/switchbot/token'
+      Type: SecureString
+      Value: !Ref SwitchBotToken
+      Description: 'SwitchBot API Token'
+
+  SwitchBotSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/switchbot/secret'
+      Type: SecureString
+      Value: !Ref SwitchBotSecret
+      Description: 'SwitchBot API Secret'
+
+  SwitchBotDeviceIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '/switchbot/device_id'
+      Type: SecureString
+      Value: !Ref SwitchBotDeviceId
+      Description: 'SwitchBot Device ID'
+
+  # Lambda実行ロール
+  SwitchBotLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                Resource:
+                  - !GetAtt ThingSpeakApiKeyParameter.Arn
+                  - !GetAtt SwitchBotTokenParameter.Arn
+                  - !GetAtt SwitchBotSecretParameter.Arn
+                  - !GetAtt SwitchBotDeviceIdParameter.Arn
+
+  # Lambda関数
+  SwitchBotCO2Function:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: switchbot-co2-thingspeak
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt SwitchBotLambdaRole.Arn
+      Runtime: python3.9
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          # コードはデプロイ時に更新されます
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Lambda function created by CloudFormation'
+              }
+
+  # CloudWatch Events Rule (EventBridge)
+  ScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: SwitchBotCO2DataCollectionSchedule
+      Description: 'SwitchBot CO2センサーからデータ収集するスケジュール'
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SwitchBotCO2Function.Arn
+          Id: 'SwitchBotCO2FunctionTarget'
+
+  # Lambda関数の実行権限を付与
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref SwitchBotCO2Function
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt ScheduleRule.Arn
+
+Outputs:
+  LambdaFunctionName:
+    Description: 'Lambda関数の名前'
+    Value: !Ref SwitchBotCO2Function
+
+  LambdaFunctionArn:
+    Description: 'Lambda関数のARN'
+    Value: !GetAtt SwitchBotCO2Function.Arn
+
+  ScheduleRuleName:
+    Description: 'スケジュールルールの名前'
+    Value: !Ref ScheduleRule
