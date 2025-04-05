@@ -1,0 +1,10 @@
+# SwitchBot設定
+sensor:
+  switchbot:
+    token: "your_token_here"
+    secret: "your_secret_here"
+    device_id: "your_device_id_here"
+
+# ThingSpeak設定
+thingspeak:
+  api_key: "your_api_key_here"

@@ -7,7 +7,19 @@ SwitchBot の CO2 センサーからデータを取得し、ThingSpeak に送信
 - AWS アカウント
 - SwitchBot アカウントと API 認証情報
 - ThingSpeak アカウントと Write API Key
-- Python 3.9 以上（デプロイパッケージ作成用）
+- Python 3.9 以上
+
+## プロジェクト構成
+
+```
+.
+├── lambda_function.py     # Lambda用のメイン関数
+├── switchbot_sensor.py    # SwitchBotセンサークラス
+├── requirements.txt       # 依存パッケージ一覧
+├── config.yml.example     # 設定ファイルのテンプレート
+└── tools/                # ユーティリティツール
+    └── list_devices.py   # デバイスID取得ツール
+```
 
 ## セットアップ手順
 
@@ -18,20 +30,33 @@ git clone https://github.com/yourusername/switchbot-co2-monitor.git
 cd switchbot-co2-monitor
 ```
 
-2. 環境変数の準備
-
-- `env.example`を参考に、必要な認証情報を控えておく
-  - SwitchBot Token
-  - SwitchBot Secret
-  - SwitchBot Device ID
-  - ThingSpeak API Key
-
-3. デプロイパッケージの作成
+2. 必要なパッケージのインストール
 
 ```bash
-# デプロイパッケージ用ディレクトリの作成
-mkdir switchbot-lambda
-cd switchbot-lambda
+pip install -r requirements.txt
+```
+
+3. デバイス ID の取得
+
+```bash
+# 設定ファイルの準備
+cp config.yml.example config.yml
+
+# config.ymlを編集し、SwitchBotのtokenとsecretを設定
+# device_idは空のままでOK
+
+# デバイス一覧の取得
+python tools/list_devices.py
+
+# 出力された一覧からCO2センサーのdevice_idをconfig.ymlに設定
+```
+
+4. デプロイパッケージの作成
+
+```bash
+# 一時的なビルドディレクトリの作成
+mkdir build
+cd build
 
 # 必要なファイルのコピー
 cp ../lambda_function.py .
@@ -42,10 +67,14 @@ cp ../requirements.txt .
 pip install --target . -r requirements.txt
 
 # ZIPファイルの作成
-zip -r ../switchbot-lambda.zip .
+zip -r ../deployment.zip .
+
+# 一時ディレクトリの削除
+cd ..
+rm -rf build
 ```
 
-4. AWS 環境のセットアップ
+5. AWS 環境のセットアップ
 
    1. IAM ロールの作成
 
@@ -61,14 +90,16 @@ zip -r ../switchbot-lambda.zip .
 
    3. 環境変数の設定
 
-      - `SWITCHBOT_TOKEN`
-      - `SWITCHBOT_SECRET`
-      - `SWITCHBOT_DEVICE_ID`
-      - `THINGSPEAK_API_KEY`
+      - Lambda 関数の「設定」タブから「環境変数」を選択
+      - config.yml の内容を基に以下の環境変数を設定：
+        - `SWITCHBOT_TOKEN`：SwitchBot の API トークン
+        - `SWITCHBOT_SECRET`：SwitchBot の API シークレット
+        - `SWITCHBOT_DEVICE_ID`：CO2 センサーのデバイス ID
+        - `THINGSPEAK_API_KEY`：ThingSpeak の Write API Key
 
    4. デプロイパッケージのアップロード
 
-      - 作成した`switchbot-lambda.zip`をアップロード
+      - 作成した`deployment.zip`をアップロード
 
    5. 基本設定の調整
 
@@ -80,7 +111,7 @@ zip -r ../switchbot-lambda.zip .
       - スケジュール：`rate(1 hour)`
       - ターゲット：作成した Lambda 関数
 
-5. 動作確認
+6. 動作確認
    - Lambda 関数のテスト実行
    - CloudWatch ログの確認
    - ThingSpeak でのデータ受信確認
@@ -96,6 +127,10 @@ zip -r ../switchbot-lambda.zip .
 - CloudWatch ログでエラーを確認
 - 環境変数が正しく設定されているか確認
 - API 認証情報が有効か確認
+- デプロイパッケージの作成に失敗する場合：
+  - Python 環境が 3.9 以上であることを確認
+  - 必要なパッケージがインストールできているか確認
+  - 一時ディレクトリのパーミッションを確認
 
 ## ライセンス
 
