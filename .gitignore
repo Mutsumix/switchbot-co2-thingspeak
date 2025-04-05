@@ -24,10 +24,14 @@ wheels/
 .installed.cfg
 *.egg
 
-# 仮想環境
+# Environments
+.env
+.venv
+env/
 venv/
-.venv/
 ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .idea/
@@ -49,4 +53,8 @@ config.yml
 
 # ログファイル
 *.log
+
+# Project specific
+switchbot-lambda.zip
+switchbot-lambda/
 
