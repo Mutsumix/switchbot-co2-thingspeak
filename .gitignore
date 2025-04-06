@@ -48,9 +48,6 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# 設定ファイル
-config.yml
-
 # ログファイル
 *.log
 
@@ -59,4 +56,6 @@ switchbot-lambda.zip
 switchbot-lambda/
 deployment.zip
 build/
+package/
+lambda.zip
 
