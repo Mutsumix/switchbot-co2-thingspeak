@@ -4,10 +4,12 @@ import hmac
 import base64
 import time
 import uuid
+import json
 from typing import Optional, Dict, Any, Tuple
-from logging import getLogger
+import logging
+import traceback
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 class SwitchBotSensor:
     """SwitchBotセンサーとの通信を管理するクラス"""
@@ -21,66 +23,86 @@ class SwitchBotSensor:
             secret (str): SwitchBot APIシークレット
             device_id (str): デバイスID
         """
-        self.token = token  # Bearerプレフィックスは後で付ける
+        self.token = token
         self.secret = secret
         self.device_id = device_id
         self.base_url = "https://api.switch-bot.com/v1.1"
 
     def _generate_sign(self):
-        """認証用署名を生成"""
-        nonce = str(uuid.uuid4())
-        t = str(int(round(time.time() * 1000)))
-        string_to_sign = f"{self.token}{t}{nonce}"
+        """署名を生成する"""
+        try:
+            t = str(int(round(time.time() * 1000)))
+            nonce = base64.b64encode(bytes(str(time.time()), 'utf-8')).decode()
+            sign_str = f"{self.token}{t}{nonce}"
 
-        string_to_sign = bytes(string_to_sign, 'utf-8')
-        secret = bytes(self.secret, 'utf-8')
+            logger.debug(f"署名文字列: {sign_str}")
 
-        sign = base64.b64encode(
-            hmac.new(secret, msg=string_to_sign, digestmod=hashlib.sha256).digest()
-        ).decode('utf-8')
+            sign_hmac = hmac.new(bytes(self.secret, 'utf-8'),
+                               bytes(sign_str, 'utf-8'),
+                               hashlib.sha256)
+            sign = base64.b64encode(sign_hmac.digest()).decode('utf-8')
 
-        return sign, t, nonce
+            logger.debug(f"生成された署名: {sign}")
+            return sign, t, nonce
+        except Exception as e:
+            logger.error(f"署名の生成に失敗: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
 
     def get_data(self):
-        """
-        センサーからデータを取得する
-
-        Returns:
-            dict or None: センサーデータを含む辞書、エラー時はNone
-        """
-        url = f"{self.base_url}/devices/{self.device_id}/status"
-        sign, t, nonce = self._generate_sign()
-
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "charset": "utf8",
-            "t": t,
-            "sign": sign,
-            "nonce": nonce
-        }
-
+        """センサーデータを取得する"""
         try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+            logger.debug("センサーデータの取得を開始")
 
-            if data["statusCode"] != 100:
-                logger.error(f"API error: {data['message']}")
-                return None
-
-            body = data["body"]
-            # APIレスポンスの内容をログ出力
-            logger.info(f"Raw API response: {body}")
-
-            return {
-                'temperature': body.get('temperature'),
-                'humidity': body.get('humidity'),
-                'co2': body.get('CO2', body.get('co2', body.get('carbonDioxide')))
+            # 認証用のヘッダーを生成
+            sign, t, nonce = self._generate_sign()
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "sign": sign,
+                "nonce": nonce,
+                "t": t,
+                "Content-Type": "application/json"
             }
 
+            logger.debug(f"認証ヘッダー生成完了: {headers}")
+
+            # デバイスのステータスを取得
+            url = f"{self.base_url}/devices/{self.device_id}/status"
+            logger.debug(f"APIリクエスト送信: {url}")
+
+            try:
+                response = requests.get(url, headers=headers)
+                response.raise_for_status()
+                logger.debug(f"APIレスポンスステータス: {response.status_code}")
+                logger.debug(f"APIレスポンスヘッダー: {response.headers}")
+                logger.debug(f"APIレスポンス本文: {response.text}")
+
+                data = response.json()
+                logger.debug(f"APIレスポンスJSON: {data}")
+
+                if data.get("statusCode") != 100:
+                    logger.error(f"APIエラー: {data}")
+                    return None
+
+                # 必要なデータを抽出
+                result = {
+                    "temperature": data["body"]["temperature"],
+                    "humidity": data["body"]["humidity"],
+                    "co2": data["body"]["CO2"]
+                }
+
+                logger.debug(f"取得したセンサーデータ: {result}")
+                return result
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"APIリクエストエラー: {str(e)}")
+                logger.error(f"レスポンス: {e.response.text if e.response else 'No response'}")
+                logger.error(traceback.format_exc())
+                return None
+
         except Exception as e:
-            logger.error(f"Failed to get sensor data: {e}")
+            logger.error(f"センサーデータの取得に失敗: {str(e)}")
+            logger.error(traceback.format_exc())
             return None
 
     def cleanup(self):
